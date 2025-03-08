@@ -57,9 +57,9 @@ class environment:
             Macro_position = self.Macro_position[i_BS]
             d1 = abs(position_veh[0] - Macro_position[0])
             d2 = abs(position_veh[1] - Macro_position[1])
-            dis_all[i_BS] = math.hypot(d1, d2)  # 两个数的平方和的平方根
+            dis_all[i_BS] = math.hypot(d1, d2)  # 两个数的平方和的平方根 #车辆与所有宏基站的距离
 
-        return np.argmin(dis_all)
+        return np.argmin(dis_all)   #返回距离最小的宏基站的索引
 
     def micro_allocate(self, position_veh):
         n_BS = self.n_micro
@@ -70,17 +70,17 @@ class environment:
             d2 = abs(position_veh[1] - Micro_position[1])
             dis_all[i_BS] = math.hypot(d1, d2)
 
-        return np.argmin(dis_all)
+        return np.argmin(dis_all)   #返回距离最小的微基站的索引
 
     def get_path_loss_Macro(self, position_veh, i_macro):
         Macro_position = self.Macro_position[i_macro]
         d1 = abs(position_veh[0] - Macro_position[0])
         d2 = abs(position_veh[1] - Macro_position[1])
         distance = math.hypot(d1, d2)
-        r = math.sqrt((distance ** 2) + ((self.h_bs - self.h_ms) ** 2)) / 1000  # 估算信号在空间中传播的衰减情况 km
-        if r < 25: r = 25
-        Loss = 128.1 + 37.6 * np.log10(r)
-        return Loss
+        r = math.sqrt((distance ** 2) + ((self.h_bs - self.h_ms) ** 2)) / 1000    #计算实际的三维距离（考虑基站高度），并转换为千米单位
+        if r < 25: r = 25   # 路径损耗的最小距离限制 25km
+        Loss = 128.1 + 37.6 * np.log10(r)   # 用路径损耗模型计算损耗值，估算信号在空间中传播的衰减情况
+        return Loss #返回车辆与宏基站的路径损耗
 
     def get_path_loss_Micro(self, position_veh, i_micro):
         Micro_position = self.Micro_position[i_micro]
@@ -91,7 +91,7 @@ class environment:
         r = math.sqrt((distance ** 2) + ((self.h_bs - self.h_ms) ** 2)) / 1000
         if r < 25: r = 25
         Loss = 128.1 + 37.6 * np.log10(r)
-        return Loss
+        return Loss #返回车辆与微基站的路径损耗
 
     def get_shadowing(self, delta_distance, shadowing):
         self.R = np.sqrt(0.5 * np.ones([1, 1]) + 0.5 * np.identity(1))
