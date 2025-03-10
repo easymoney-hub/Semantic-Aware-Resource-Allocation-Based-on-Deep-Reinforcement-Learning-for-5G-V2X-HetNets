@@ -27,11 +27,11 @@ device = torch.device('cpu')
 
 class Memory:
     def __init__(self):
-        self.actions = []
+        self.actions = []   
         self.states = []
-        self.logprobs = []
+        self.logprobs = []  #动作概率
         self.rewards = []
-        self.is_terminals = []
+        self.is_terminals = []  #中止标志
 
     def clear_memory(self):
         del self.actions[:]
@@ -42,7 +42,7 @@ class Memory:
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, action_std):
+    def __init__(self, state_dim, action_dim, action_std):  #action_std是动作的标准差
         super(ActorCritic, self).__init__()
         # action mean range -1 to 1
         self.actor = nn.Sequential(
@@ -63,23 +63,25 @@ class ActorCritic(nn.Module):
             nn.Tanh(),
             nn.Linear(256, 1)
         )
-        self.action_var = torch.full((action_dim,), action_std * action_std).to(device)
+        #定义动作的方差，PPO中使用动作的方差来衡量动作的探索和利用
+        self.action_var = torch.full((action_dim,), action_std * action_std).to(device)  
 
     def forward(self):
         raise NotImplementedError
 
     def act(self, state, memory):
-        action_mean = self.actor(state)
-        cov_mat = torch.diag(self.action_var).to(device)
-
+        action_mean = self.actor(state) #生成动作均值
+        cov_mat = torch.diag(self.action_var).to(device)    #协方差矩阵
+        #创建多元正态分布，使用均值和协方差矩阵定义动作的概率分布
         dist = MultivariateNormal(action_mean, cov_mat)
+        #采样动作并计算概率
         action = dist.sample()
         action_logprob = dist.log_prob(action)
-
+        #储存经验
         memory.states.append(state)
         memory.actions.append(action)
         memory.logprobs.append(action_logprob)
-
+        # 将采样得到的动作值从计算图中分离出来，因为在执行动作时我们只需要动作的具体值，而不需要进行梯度计算
         return action.detach()
 
     def evaluate(self, state, action):

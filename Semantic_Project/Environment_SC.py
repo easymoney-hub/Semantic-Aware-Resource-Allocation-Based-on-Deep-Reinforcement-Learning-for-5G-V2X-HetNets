@@ -142,64 +142,59 @@ class environment:
 
     def compute_rate(self, veh_RB_power, veh_BS, veh_RB, i_agent, i_step):
         self.V2I_signal[i_agent] = 0
-        if veh_BS[i_agent, i_step] == 1:
+        if veh_BS[i_agent, i_step] == 1:    #连接宏基站
             i_macro = environment.macro_allocate(self, self.pos_veh[i_agent])
             i_micro = 0
-            veh_gain = environment.get_path_loss_Macro(self, self.pos_veh[i_agent], i_macro)
+            veh_gain = environment.get_path_loss_Macro(self, self.pos_veh[i_agent], i_macro)    #计算路损
             for i_RB in range(self.n_RB):
-                self.V2I_signal[i_agent] += (veh_RB[i_agent, i_RB, i_step]) * (10 ** ((veh_RB_power[
-                                                                                           i_agent, i_RB, i_step] - veh_gain + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
-            veh_rate = self.BW * np.log2(1 + np.divide(self.V2I_signal[i_agent], (
-                        environment.get_interference(self, veh_RB_power, veh_BS, veh_RB, i_macro, i_micro, i_agent,
-                                                     i_step) + self.sig2)))
+                #veh_RB[i_agent, i_RB, i_step]表示第i_agent个车辆在第i_step时刻是否使用了第i_RB个资源块
+                # 10 ** ((... ) / 10)这是将dB单位转换为线性单位的计算 --括号里是 发射功率(dB)-路径损耗(dB)+车辆天线增益(dB)+基站天线增益(dB)-基站噪声系数(dB)
+                self.V2I_signal[i_agent] += (veh_RB[i_agent, i_RB, i_step]) * (10 ** ((veh_RB_power[i_agent, i_RB, i_step] - veh_gain + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
+            #香农信道公式求发送车辆发送速率
+            veh_rate = self.BW * np.log2(1 + np.divide(self.V2I_signal[i_agent], (environment.get_interference(self, veh_RB_power, veh_BS, veh_RB, i_macro, i_micro, i_agent,i_step) + self.sig2)))
 
-        elif veh_BS[i_agent, i_step] == 0:
+        elif veh_BS[i_agent, i_step] == 0:  #连接微基站
             i_micro = environment.micro_allocate(self, self.pos_veh[i_agent])
             i_macro = 0
             veh_gain = environment.get_path_loss_Micro(self, self.pos_veh[i_agent], i_micro)
             for i_RB in range(self.n_RB):
-                self.V2I_signal[i_agent] += (veh_RB[i_agent, i_RB, i_step]) * (10 ** ((veh_RB_power[
-                                                                                           i_agent, i_RB, i_step] - veh_gain + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
-            veh_rate = self.BW * np.log2(1 + np.divide(self.V2I_signal[i_agent], (
-                        environment.get_interference(self, veh_RB_power, veh_BS, veh_RB, i_macro, i_micro, i_agent,
-                                                     i_step) + self.sig2)))
+                self.V2I_signal[i_agent] += (veh_RB[i_agent, i_RB, i_step]) * (10 ** ((veh_RB_power[i_agent, i_RB, i_step] - veh_gain + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
+            veh_rate = self.BW * np.log2(1 + np.divide(self.V2I_signal[i_agent], (environment.get_interference(self, veh_RB_power, veh_BS, veh_RB, i_macro, i_micro, i_agent, i_step) + self.sig2)))
 
         return veh_rate
 
     def get_interference(self, veh_RB_power, veh_BS, veh_RB, i_macro, i_micro, i_agent, i_step):
         self.interference[i_agent] = 0
-        if veh_BS[i_agent, i_step] == 1:
-            for i_agent_plus in range(self.n_agent):
-                if i_agent_plus == i_agent: continue
-                if veh_BS[i_agent_plus, i_step - 1] == 1:
+        if veh_BS[i_agent, i_step] == 1:    #连接宏基站时
+            for i_agent_plus in range(self.n_agent):    #只考虑同样连接到宏基站的其他车辆产生的干扰
+                if i_agent_plus == i_agent: continue    #跳过自身
+                if veh_BS[i_agent_plus, i_step - 1] == 1:   #其他车辆在i_step-1 时刻的宏基站连接状态，因为干扰是其他车辆在上一个时间步产生的
                     for i_RB in range(self.n_RB):
-                        self.interference[i_agent] += veh_RB[i_agent_plus, i_RB, i_step - 1] * veh_RB[
-                            i_agent, i_RB, i_step - 1] * (10 ** ((veh_RB_power[
-                                                                      i_agent_plus, i_RB, i_step - 1] - environment.get_path_loss_Macro(
-                            self, self.pos_veh[i_agent_plus],
-                            i_macro) + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
-        if veh_BS[i_agent, i_step] == 0:
-            for i_agent_plus in range(self.n_agent):
+                        #veh_RB[i_agent_plus, i_RB, i_step - 1] * veh_RB[i_agent, i_RB, i_step - 1] 检查干扰源车辆和目标车辆在上个时间步是否使用相同的资源块
+                        #后半部分是信号强度计算
+                        self.interference[i_agent] += veh_RB[i_agent_plus, i_RB, i_step - 1] * veh_RB[i_agent, i_RB, i_step - 1] \
+                                                        * (10 ** ((veh_RB_power[i_agent_plus, i_RB, i_step - 1] - environment.get_path_loss_Macro(self, self.pos_veh[i_agent_plus],i_macro) + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
+        
+        if veh_BS[i_agent, i_step] == 0:    #连接微基站
+            for i_agent_plus in range(self.n_agent):    #只考虑同样连接到微基站的其他车辆产生的干扰
                 if i_agent_plus == i_agent: continue
                 if veh_BS[i_agent_plus, i_step - 1] == 0:
                     for i_RB in range(self.n_RB):
-                        self.interference[i_agent] += veh_RB[i_agent_plus, i_RB, i_step - 1] * veh_RB[
-                            i_agent, i_RB, i_step - 1] * (10 ** ((veh_RB_power[
-                                                                      i_agent_plus, i_RB, i_step - 1] - environment.get_path_loss_Micro(
-                            self, self.pos_veh[i_agent_plus],
-                            i_micro) + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
+                        self.interference[i_agent] += veh_RB[i_agent_plus, i_RB, i_step - 1] * veh_RB[i_agent, i_RB, i_step - 1]\
+                                                     * (10 ** ((veh_RB_power[i_agent_plus, i_RB, i_step - 1] - environment.get_path_loss_Micro(self, self.pos_veh[i_agent_plus],i_micro) + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
 
         return self.interference[i_agent]
-
-    def get_interference_macro(self, i_agent, veh_power_start, veh_BS_start, veh_RB_start, i_macro):
+    
+    def get_interference_macro(self, i_agent, veh_power_start, veh_BS_start, veh_RB_start, i_macro):    #veh_power_start--车辆的初始发射功率;veh_BS_start--车辆的初始基站连接状态;veh_RB_start--车辆的初始资源块分配
         self.interference[i_agent] = 0
         for i_agent_plus in range(self.n_agent):
             if i_agent_plus == i_agent: continue
-            if veh_BS_start[i_agent_plus] == 1:
+            if veh_BS_start[i_agent_plus] == 1: #检查其他车辆是否同样连接到宏基站
                 for i_RB in range(self.n_RB):
-                    self.interference[i_agent] += veh_RB_start[i_agent_plus, i_RB] * veh_RB_start[
-                        i_agent, i_RB] * (10 ** ((veh_power_start[i_agent_plus, i_RB] - environment.get_path_loss_Macro(
-                        self, self.pos_veh[i_agent_plus], i_macro) + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
+                    # veh_RB_start[i_agent_plus, i_RB] * veh_RB_start[i_agent, i_RB] 检查干扰源车辆和目标车辆是否使用相同的资源块
+                    # 后半部分是信号强度计算，干扰源车辆发送功率-宏基站路径损耗+车辆天线增益+基站天线增益-基站噪声系数
+                    self.interference[i_agent] += veh_RB_start[i_agent_plus, i_RB] * veh_RB_start[i_agent, i_RB] \
+                                                * (10 ** ((veh_power_start[i_agent_plus, i_RB] - environment.get_path_loss_Macro(self, self.pos_veh[i_agent_plus], i_macro) + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
         return self.interference[i_agent]
 
     def get_interference_micro(self, i_agent, veh_power_start, veh_BS_start, veh_RB_start, i_micro):
@@ -208,20 +203,20 @@ class environment:
             if i_agent_plus == i_agent: continue
             if veh_BS_start[i_agent_plus] == 0:
                 for i_RB in range(self.n_RB):
-                    self.interference[i_agent] += veh_RB_start[i_agent_plus, i_RB] * veh_RB_start[
-                        i_agent, i_RB] * (10 ** ((veh_power_start[i_agent_plus, i_RB] - environment.get_path_loss_Micro(
-                        self, self.pos_veh[i_agent_plus], i_micro) + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
+                    self.interference[i_agent] += veh_RB_start[i_agent_plus, i_RB] * veh_RB_start[i_agent, i_RB]\
+                         * (10 ** ((veh_power_start[i_agent_plus, i_RB] - environment.get_path_loss_Micro(self, self.pos_veh[i_agent_plus], i_micro) + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
         return self.interference[i_agent]
 
+    """返回SINR"""
     def compute_sinr(self, veh_RB_power, veh_BS, veh_RB, i_agent, i_step):
         self.V2I_signal[i_agent] = 0
-        if veh_BS[i_agent, i_step] == 1:
-            i_macro = environment.macro_allocate(self, self.pos_veh[i_agent])
+        if veh_BS[i_agent, i_step] == 1:    #若链接宏基站
+            i_macro = environment.macro_allocate(self, self.pos_veh[i_agent])   #分配距离最近宏基站
             i_micro = 0
-            veh_gain = environment.get_path_loss_Macro(self, self.pos_veh[i_agent], i_macro)
+            veh_gain = environment.get_path_loss_Macro(self, self.pos_veh[i_agent], i_macro)    #计算路损
             for i_RB in range(self.n_RB):
-                self.V2I_signal[i_agent] += (veh_RB[i_agent, i_RB, i_step]) * (10 ** ((veh_RB_power[
-                                                                                           i_agent, i_RB, i_step] - veh_gain + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
+                self.V2I_signal[i_agent] += (veh_RB[i_agent, i_RB, i_step]) \
+                                            * (10 ** ((veh_RB_power[i_agent, i_RB, i_step] - veh_gain + self.vehAntGain + self.bsAntGain - self.bsNoiseFigure) / 10))
             # 输入信号、干扰和噪声功率，以 dBm 为单位
             signal_power_dBm = self.V2I_signal[i_agent]  # 信号功率
             interference_power_dBm = environment.get_interference(self, veh_RB_power, veh_BS, veh_RB, i_macro, i_micro,
@@ -253,7 +248,8 @@ class environment:
             # print("信干噪比（SINR）为：", sinr_dB, "dB")
 
         return sinr_dB
-
+    
+    """返回速率和SINR"""
     def compute_sinr_macro(self, i_agent, veh_RB_start, veh_power_start, veh_BS_start):
         self.V2I_signal[i_agent] = 0
         i_macro = environment.macro_allocate(self, self.pos_veh[i_agent])
@@ -275,6 +271,7 @@ class environment:
         return rate, sinr_dB
         # print("信干噪比（SINR）为：", sinr_dB, "dB")
 
+    """返回速率和SINR"""
     def compute_sinr_micro(self, i_agent, veh_RB_start, veh_power_start, veh_BS_start):
         self.V2I_signal[i_agent] = 0
         i_micro = environment.micro_allocate(self, self.pos_veh[i_agent])
@@ -295,26 +292,27 @@ class environment:
 
         return rate, sinr_dB
 
+    """初始化车辆的状态和位置"""
     def make_start(self, i_agent, veh_BS_start, veh_RB_start, veh_RB_power_start):
-        self.AoI_veh = np.ones([self.n_agent], dtype=np.int64) * 100
+        self.AoI_veh = np.ones([self.n_agent], dtype=np.int64) * 100    #AoI初始值设为100
         self.AoI_WiFi = np.ones([self.n_agent], dtype=np.int64) * 100
-        self.pos_veh[i_agent, 0] = np.round(np.random.uniform(0, 1000), 2)
-        self.pos_veh[i_agent, 1] = np.round(np.random.uniform(0, 1000), 2)
-        self.dir_veh[i_agent] = np.random.choice((1, 2, 3, 4), 1)  # It means: (1='up',2='right',3='down',4='left')
+        # 在1000×1000的区域内随机生成车辆位置
+        self.pos_veh[i_agent, 0] = np.round(np.random.uniform(0, 1000), 2)  #x坐标，四舍五入到小数点后两位
+        self.pos_veh[i_agent, 1] = np.round(np.random.uniform(0, 1000), 2)  #y坐标
+        self.dir_veh[i_agent] = np.random.choice((1, 2, 3, 4), 1)  # 设置方向 (1='up',2='right',3='down',4='left')
 
-        if veh_BS_start[i_agent] == 1:
+        if veh_BS_start[i_agent] == 1:  #如果连接到宏基站
             i_Macro = environment.macro_allocate(self, self.pos_veh[i_agent])
-            self.state[i_agent, 0] = environment.get_path_loss_Macro(self, self.pos_veh[i_agent], i_Macro)
-            self.state[i_agent, 2] = self.get_interference_macro(i_agent, veh_RB_power_start, veh_BS_start, veh_RB_start, i_Macro) * (10 ** 16)
-            self.state[i_agent, 3] = np.round(np.random.uniform(6, 12))
-            self.state[i_agent, 1], self.state[i_agent, 4] = self.compute_sinr_macro(i_agent, veh_RB_start, veh_RB_power_start, veh_BS_start)
+            self.state[i_agent, 0] = environment.get_path_loss_Macro(self, self.pos_veh[i_agent], i_Macro)  # state[i_agent,0]路损
+            self.state[i_agent, 2] = self.get_interference_macro(i_agent, veh_RB_power_start, veh_BS_start, veh_RB_start, i_Macro) * (10 ** 16) # state[i_agent,2]干扰
+            self.state[i_agent, 3] = np.round(np.random.uniform(6, 12)) ## state[i_agent,3] WiFi速率
+            self.state[i_agent, 1], self.state[i_agent, 4] = self.compute_sinr_macro(i_agent, veh_RB_start, veh_RB_power_start, veh_BS_start)   # state[i_agent,1] 传输速率和SINR，
             self.veh_num_BS[i_agent, 0] = -1  # It means vehicle no connected to Micro
             self.veh_num_BS[i_agent, 1] = i_Macro
-            self.duty[i_agent] = 1
-            self.symbol_p_word = np.round(np.random.uniform(1, 20))  # symbol/word
+            self.duty[i_agent] = 1  #占空比设计为1
+            self.symbol_p_word = np.round(np.random.uniform(1, 20))  #每个词的符号数 symbol/word
 
-
-        else:
+        else:   #如果微基站
             i_Micro = environment.micro_allocate(self, self.pos_veh[i_agent])
             self.state[i_agent, 0] = environment.get_path_loss_Micro(self, self.pos_veh[i_agent], i_Micro)
             self.state[i_agent, 2] = self.get_interference_micro(i_agent, veh_RB_power_start, veh_BS_start, veh_RB_start, i_Micro) * (10 ** 16)
@@ -323,11 +321,12 @@ class environment:
 
             self.veh_num_BS[i_agent, 0] = i_Micro
             self.veh_num_BS[i_agent, 1] = -1  # It means vehicle no connected to Macro
-            self.duty[i_agent] = np.random.uniform(0, 1)
+            self.duty[i_agent] = np.random.uniform(0, 1)    #占空比设计为0~1之间的随机数
             self.symbol_p_word = np.round(np.random.uniform(1, 20))  # symbol/word
 
         return self.state[i_agent], self.veh_num_BS[i_agent], self.duty[i_agent], self.symbol_p_word
-
+    
+    """根据车辆的方向（dir_veh），每次调用该函数时车辆会向指定方向移动0.1个单位"""
     def mobility_veh(self):
         for i_agent in range(self.n_agent):
             if (self.dir_veh[i_agent]) == 1:
@@ -343,23 +342,25 @@ class environment:
                 self.pos_veh[i_agent, 0] = self.pos_veh[i_agent, 0] - 0.1
                 self.pos_veh[i_agent, 1] = self.pos_veh[i_agent, 1]
 
+    """AoI是衡量信息新鲜度的指标"""
     def Age_of_information(self, i_agent, rate_level, WiFi_rate):
-        if rate_level > self.rate_level_min:
+        if rate_level > self.rate_level_min:    #如果传输速率(rate_level)高于最小要求(rate_level_min)，说明通信质量良好，AoI重置为1
             self.AoI_veh[i_agent] = 1
         else:
-            self.AoI_veh[i_agent] += 1
+            self.AoI_veh[i_agent] += 1  #否则AoI_veh增加1，表示信息变得更"陈旧",上限为100
             if self.AoI_veh[i_agent] >= 100:
                 self.AoI_veh[i_agent] = 100
 
-        if WiFi_rate > self.WiFi_level_min:
+        if WiFi_rate > self.WiFi_level_min: #如果WiFi速率高于最小要求(WiFi_level_min)，AoI重置为1
             self.AoI_WiFi[i_agent] = 1
         else:
-            self.AoI_WiFi[i_agent] += 1
+            self.AoI_WiFi[i_agent] += 1 #否则AoI_WiFi增加1，表示信息变得更"陈旧",上限为100
             if self.AoI_WiFi[i_agent] >= 100:
                 self.AoI_WiFi[i_agent] = 100
 
         return self.AoI_veh[i_agent], self.AoI_WiFi[i_agent]
 
+    """阶跃函数(Step Function)实现，用于将输入值转换为二进制输出"""
     def G_functionself(self, G_input):
         if G_input >= 0:
             G_output = 1
@@ -373,23 +374,24 @@ class environment:
                 i_micro = environment.micro_allocate(self, self.pos_veh[i_agent])  # 判断和哪一个小基站距离最小
                 # 如果车辆未连接到宏基站（veh_BS[i_agent, i_step] == 0），则将资源块分配给距离车辆最近的微基站（i_micro）[veh_RB_BS的第二个元素]
                 for i_RB in range(self.n_RB):
-                    veh_RB_BS[i_agent, i_RB, i_micro + self.n_macro] = veh_RB[i_agent, i_RB, i_step]
+                    veh_RB_BS[i_agent, i_RB, i_micro + self.n_macro] = veh_RB[i_agent, i_RB, i_step]    #i_micro + self.n_macro表示微基站的索引，前n_macro表示宏基站的索引
             if veh_BS[i_agent, i_step] == 1:
                 i_macro = environment.macro_allocate(self, self.pos_veh[i_agent])
                 # 如果车辆连接到了宏基站（veh_BS[i_agent, i_step] == 1），则将资源块分配给相应的宏基站[veh_RB_BS的第一个元素]
                 for i_RB in range(self.n_RB):
                     veh_RB_BS[i_agent, i_RB, i_macro] = veh_RB[i_agent, i_RB, i_step]
         return veh_RB_BS
-
+        
+    """检查约束条件：1.一个资源块再同一时间只能被一辆车使用；2.一个车辆在同一基站只能使用一个资源块"""
     def check_constrain(self, veh_RB, veh_RB_BS, i_step):
         for i_BS in range(self.n_BS):
-            for i_RB in range(self.n_RB):
-                if np.sum(veh_RB_BS[:, i_RB, i_BS]) > 1:
+            for i_RB in range(self.n_RB):   
+                if np.sum(veh_RB_BS[:, i_RB, i_BS]) > 1:    #检查是否有多个车辆使用了同一基站的同一资源块
                     for i_agent in range(self.n_agent):
-                        if np.sum(veh_RB_BS[i_agent, :, i_BS]) > 1:
-                            veh_RB_BS[i_agent, i_RB, i_BS] = 0
-                            veh_RB[i_agent, i_RB, i_step] = 0
-                if np.sum(veh_RB_BS[:, i_RB, i_BS]) > 1:
+                        if np.sum(veh_RB_BS[i_agent, :, i_BS]) > 1:     #检查每个车辆是否在该基站上使用了多个资源块
+                            veh_RB_BS[i_agent, i_RB, i_BS] = 0  #清除该车辆在当前资源块的分配
+                            veh_RB[i_agent, i_RB, i_step] = 0   
+                if np.sum(veh_RB_BS[:, i_RB, i_BS]) > 1:    #如果清除个别分配后仍有冲突，清除所有车辆在该资源块的分配：
                     veh_RB_BS[:, i_RB, i_BS] = 0
                     veh_RB[:, i_RB, i_step] = 0
         return veh_RB
