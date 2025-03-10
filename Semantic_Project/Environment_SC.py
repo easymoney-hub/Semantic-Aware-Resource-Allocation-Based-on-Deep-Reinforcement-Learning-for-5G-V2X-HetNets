@@ -103,43 +103,40 @@ class environment:
         reward = 0
         for i_BS in range(self.n_BS):
             for i_RB in range(self.n_RB):
-                if np.sum(veh_RB_BS[:, i_RB, i_BS]) > 1:
+                if np.sum(veh_RB_BS[:, i_RB, i_BS]) > 1:    # 若有多个车辆共享同一个资源块，给予惩罚
                     reward += -10
-        if WiFi_level > self.WiFi_level_min: reward += (rate_level / self.rate_level_min)
+        if WiFi_level > self.WiFi_level_min: reward += (rate_level / self.rate_level_min)   # 如果WiFi速率超过最小要求(6MB/s)， 给予正向奖励，奖励大小与速率成正比
         return reward
 
     def get_reward_sc(self, semantic_WiFi_level, semantic_rate_level, veh_RB, veh_RB_BS, veh_micro, i_step):
         reward = 0
         for i_BS in range(self.n_BS):
             for i_RB in range(self.n_RB):
-                if np.sum(veh_RB_BS[:, i_RB, i_BS]) > 1:  # 0检查每个资源块是否被多个车辆共享。如果某个资源块被多个车辆共享，将 reward 减少 10
+                if np.sum(veh_RB_BS[:, i_RB, i_BS]) > 1:   #若有多个车辆共享同一个资源块，给予惩罚
                     reward += -10
 
-        if semantic_WiFi_level/(self.BW*1000) > self.semantic_WiFi_level_min:
+        if semantic_WiFi_level/(self.BW*1000) > self.semantic_WiFi_level_min:   # 如果语义WiFi速率/(1000*BandWidth)超过最小要求， 给予正向奖励
             reward += (semantic_rate_level / (self.semantic_rate_level_min * 10))
         return reward
 
     def get_state(self, veh_RB_power, veh_BS, veh_RB, WiFi_rate, i_agent, i_step):
-        if veh_BS[i_agent, i_step] == 1:
+        if veh_BS[i_agent, i_step] == 1:    # 如果车辆连接到宏基站  ---veh_BS[i_agent, i_step]==0 : 表示车辆连接微基站；  veh_BS[i_agent, 1]==1 : 车辆连接宏基站
             i_macro = environment.macro_allocate(self, self.pos_veh[i_agent])
             i_micro = 0
             self.state[i_agent, 0] = environment.get_path_loss_Macro(self, self.pos_veh[i_agent], i_macro)
             self.veh_num_BS[i_agent, 0] = -1
             self.veh_num_BS[i_agent, 1] = i_macro
-        else:
+        else:   # 如果车辆连接到微基站
             i_micro = environment.micro_allocate(self, self.pos_veh[i_agent])
             i_macro = 0
-            self.state[i_agent, 0] = environment.get_path_loss_Micro(self, self.pos_veh[i_agent], i_micro)
+            self.state[i_agent, 0] = environment.get_path_loss_Micro(self, self.pos_veh[i_agent], i_micro)  #state[i_agent, 0] : 路径损耗
             self.veh_num_BS[i_agent, 0] = i_micro
             self.veh_num_BS[i_agent, 1] = -1
 
-        self.state[i_agent, 1] = environment.compute_rate(self, veh_RB_power, veh_BS, veh_RB,
-                                                          i_agent, i_step)
-        self.state[i_agent, 2] = environment.get_interference(self, veh_RB_power, veh_BS, veh_RB, i_macro, i_micro,
-                                                              i_agent, i_step) * (10 ** 16)
-        self.state[i_agent, 3] = WiFi_rate[i_agent, i_step]
-        self.state[i_agent, 4] = environment.compute_sinr(self, veh_RB_power, veh_BS, veh_RB,
-                                                          i_agent, i_step)
+        self.state[i_agent, 1] = environment.compute_rate(self, veh_RB_power, veh_BS, veh_RB, i_agent, i_step)  #state[i_agent, 1] : 传输速率
+        self.state[i_agent, 2] = environment.get_interference(self, veh_RB_power, veh_BS, veh_RB, i_macro, i_micro, i_agent, i_step) * (10 ** 16)   #state[i_agent, 2] : 干扰值（放大10^16倍）
+        self.state[i_agent, 3] = WiFi_rate[i_agent, i_step]     #state[i_agent, 3] : WiFi速率
+        self.state[i_agent, 4] = environment.compute_sinr(self, veh_RB_power, veh_BS, veh_RB, i_agent, i_step)  #state[i_agent, 4] : SINR值（信干噪比）
 
         return self.state[i_agent], self.veh_num_BS[i_agent]
 
