@@ -382,7 +382,7 @@ class environment:
                     veh_RB_BS[i_agent, i_RB, i_macro] = veh_RB[i_agent, i_RB, i_step]
         return veh_RB_BS
         
-    """检查约束条件：1.一个资源块再同一时间只能被一辆车使用；2.一个车辆在同一基站只能使用一个资源块"""
+    """检查是否有资源块冲突"""
     def check_constrain(self, veh_RB, veh_RB_BS, i_step):
         for i_BS in range(self.n_BS):
             for i_RB in range(self.n_RB):   
